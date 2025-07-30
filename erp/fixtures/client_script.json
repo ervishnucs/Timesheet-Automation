@@ -1,0 +1,24 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Timesheet",
+  "enabled": 1,
+  "modified": "2025-07-29 12:44:35.883278",
+  "module": "Erp",
+  "name": "TS",
+  "script": "console.log(\"Timesheet Detail client script loaded\");\n\nfrappe.ui.form.on(\"Timesheet Detail\", {\n    from_time: function (frm, cdt, cdn) {\n        console.log(\"from_time triggered for row:\", cdt, cdn);\n\n        const row = locals[cdt][cdn];\n        if (!row.from_time || !frm.doc.company) return;\n\n        const from_date = frappe.datetime.str_to_obj(row.from_time).toISOString().split(\"T\")[0];\n        console.log(\" Extracted from_date:\", from_date);\n\n        frappe.call({\n            method: \"is_company_holiday\",\n            args: { date: from_date },\n            callback: function (r) {\n                console.log(\"Server responded:\", r);\n                const isHoliday = r.message?.is_holiday || false;\n                console.log(\" isHoliday response for date\", from_date, \"=>\", isHoliday);\n\n                frm._is_holiday = isHoliday;\n\n                if (isHoliday && row.task === \"TASK-2025-00001\") {\n                    console.log(\"clearing task 'TASK-2025-00001' because it's a holiday\");\n                    frappe.model.set_value(cdt, cdn, \"task\", null);\n                    frm.refresh_field(\"time_logs\");\n                }\n\n                frm.fields_dict.time_logs.grid.get_field(\"task\").get_query = function (_frm, cdt_inner, cdn_inner) {\n                    const child = locals[cdt_inner][cdn_inner];\n                    let filters = {\n                        project: child.project,\n                        status: [\"!=\", \"Cancelled\"]\n                    };\n\n                    if (frm._is_holiday) {\n                        filters[\"name\"] = [\"!=\", \"TASK-2025-00001\"];\n                    }\n\n                    return { filters };\n                };\n\n                frm.refresh_field(\"time_logs\");\n\n              \n                frm.fields_dict.time_logs.grid.refresh();\n            }\n        });\n    }\n});\n",
+  "view": "Form"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Timesheet",
+  "enabled": 0,
+  "modified": "2025-07-29 11:57:35.292263",
+  "module": "Erp",
+  "name": "Timesheet For Holiday",
+  "script": "\n    frappe.ui.form.on(\"Timesheet Detail\", {\n\tfrom_time: function (frm, cdt, cdn) {\n\t\n        const row = locals[cdt][cdn];\n\n        if (!row.from_time || !frm.doc.company) return;\n\n        const from_date = frappe.datetime.str_to_obj(row.from_time).toISOString().split(\"T\")[0];\n\n        frappe.call({\n            method: \"is_company_holiday\",\n            args: { date: from_date },\n            callback: function (r) {\n                \n                const isHoliday = r.message?.is_holiday || false;\n\n                frm.fields_dict.time_logs.grid.get_field(\"task\").get_query = function (_frm, cdt_inner, cdn_inner) {\n                    const child = locals[cdt_inner][cdn_inner];\n                    let filters = {\n                    project: child.project,\n                    status: [\"!=\", \"Cancelled\"]\n                };\n\n                \n                if (child.task !== \"TASK-2025-00001\") {\n                    filters[\"name\"] = [\"!=\", \"TASK-2025-00001\"];\n                }\n\n                return { filters };\n }\n\t\t\t\n            \n        }\n        });\n    \n}\n})\n\n\n\n\n\n",
+  "view": "Form"
+ }
+]

@@ -1,0 +1,40 @@
+[
+ {
+  "allow_guest": 1,
+  "api_method": "is_company_holiday",
+  "cron_format": null,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Server Script",
+  "doctype_event": "Before Save",
+  "enable_rate_limit": 0,
+  "event_frequency": "All",
+  "modified": "2025-07-29 12:44:44.616608",
+  "module": "Erp",
+  "name": "Timesheet Notification",
+  "rate_limit_count": 5,
+  "rate_limit_seconds": 86400,
+  "reference_doctype": "Timesheet",
+  "script": "date = frappe.form_dict.get(\"date\")\n\nholiday_exists = frappe.db.exists(\"Holiday\", {\n    \"parent\": \"New\",  # Replace \"New\" with dynamic list if needed\n    \"holiday_date\": date\n})\n\nfrappe.response[\"message\"] = {\n    \"is_holiday\": bool(holiday_exists),\n    \"date\": date\n}\n",
+  "script_type": "API"
+ },
+ {
+  "allow_guest": 0,
+  "api_method": null,
+  "cron_format": null,
+  "disabled": 0,
+  "docstatus": 0,
+  "doctype": "Server Script",
+  "doctype_event": "Before Insert",
+  "enable_rate_limit": 0,
+  "event_frequency": "Daily",
+  "modified": "2025-07-29 12:59:20.064716",
+  "module": "Erp",
+  "name": "Timesheet Reminder",
+  "rate_limit_count": 5,
+  "rate_limit_seconds": 86400,
+  "reference_doctype": null,
+  "script": "def is_holiday(holiday_list, date_to_check):\n    if not holiday_list:\n        return False\n\n    return frappe.db.exists(\"Holiday\", {\n        \"parent\": holiday_list,\n        \"holiday_date\": date_to_check\n    })\n\ndef create_system_notification(user, message):\n    if not user:\n        return\n\n    notification = frappe.new_doc(\"Notification Log\")\n    notification.update({\n        \"for_user\": user,\n        \"subject\": \"Reminder: Fill Your Timesheet\",\n        \"email_content\": message,\n        \"type\": \"Alert\"\n    })\n    notification.save(ignore_permissions=True)\n\ndef remind_employees_for_timesheet():\n    # Use Frappe's date functions instead of importing datetime\n    yesterday = frappe.utils.add_days(frappe.utils.now_datetime().date(), -3)\n\n    employees = frappe.get_all(\n        \"Employee\",\n        filters={\"status\": \"Active\"},\n        fields=[\"name\", \"user_id\", \"employee_name\", \"holiday_list\"]\n    )\n\n    for emp in employees:\n        if is_holiday(emp.holiday_list, yesterday):\n            continue\n\n        filled = frappe.get_all(\n            \"Timesheet\",\n            filters={\n                \"employee\": emp.name,\n                \"start_date\": yesterday,\n                \"docstatus\": 1\n            }\n        )\n\n        if not filled:\n            message = (\n                f\"Hi {emp.employee_name},<br><br>\"\n                f\"You forgot to submit your timesheet for {yesterday}.<br>\"\n                \"Please fill it as soon as possible.\"\n            )\n\n           \n            if emp.user_id:\n                frappe.sendmail(\n                    recipients=[emp.user_id],\n                    subject=\"Reminder: Fill Your Timesheet\",\n                    message=message\n                )\n\n                create_system_notification(emp.user_id, message)\n\n            log(f\"Timesheet reminder sent to {emp.user_id} for {yesterday}\")\n\nremind_employees_for_timesheet()\n",
+  "script_type": "Scheduler Event"
+ }
+]
